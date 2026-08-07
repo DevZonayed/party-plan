@@ -1,0 +1,258 @@
+// PartyPlan — AI Party Planning + Affiliate Commerce Platform
+// Datasource is SQLite for a self-contained deployable build. Migrating to
+// PostgreSQL (PRD target) is a datasource-only change: array fields are stored
+// as Json here, and on Postgres would become native String[] / scalar lists.
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// A niche (birthday, baby shower, ...). Multi-tenant root.
+model Site {
+  id        String   @id @default(cuid())
+  slug      String   @unique // "birthday"
+  domain    String?  @unique
+  name      String
+  tagline   String?
+  config    Json     // branding, prompt template, input schema
+  active    Boolean  @default(true)
+  events    Event[]
+  themes    Theme[]
+  articles  Article[]
+  createdAt DateTime @default(now())
+}
+
+model User {
+  id        String    @id @default(cuid())
+  email     String    @unique
+  name      String?
+  password  String? // null if created via OAuth
+  role      String    @default("HOST") // HOST | ADMIN
+  sessions  Session[]
+  events    Event[]
+  createdAt DateTime  @default(now())
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique // nanoid(32), unguessable
+  expiresAt DateTime
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+model Event {
+  id           String    @id @default(cuid())
+  siteId       String
+  userId       String? // null = anonymous draft
+  token        String    @unique // guest URL — nanoid(16)
+  slug         String?
+  themeId      String?
+  childName    String? // never indexed, never in URL
+  childAge     Int?
+  guestCount   Int
+  budgetTotal  Decimal
+  partyDate    DateTime?
+  locationType String? // HOME | VENUE | OUTDOOR | PARK
+  status       String    @default("DRAFT") // DRAFT | PUBLISHED | ARCHIVED
+  message      String? // host message shown to guests
+  hostName     String?
+  site         Site      @relation(fields: [siteId], references: [id])
+  user         User?     @relation(fields: [userId], references: [id])
+  theme        Theme?    @relation(fields: [themeId], references: [id])
+  guests       Guest[]
+  registry     RegistryItem[]
+  recSets      RecommendationSet[]
+  clicks       Click[]
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([siteId, status])
+  @@index([userId])
+}
+
+model Guest {
+  id         String   @id @default(cuid())
+  eventId    String
+  name       String
+  attending  Boolean  @default(true)
+  partySize  Int      @default(1)
+  note       String?
+  browserKey String? // dedupe key (hashed)
+  createdAt  DateTime @default(now())
+  event      Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([eventId])
+}
+
+model Merchant {
+  id            String    @id @default(cuid())
+  name          String // "Factory Direct Party"
+  network       String    @default("impact")
+  campaignId    String? // Impact campaign ID
+  commissionPct Decimal?
+  cookieDays    Int?
+  feedUrl       String?
+  shopDomain    String? // e.g. factorydirectparty.com for Shopify JSON
+  linkTemplate  String // tracked URL pattern
+  active        Boolean   @default(true)
+  products      Product[]
+  clicks        Click[]
+  createdAt     DateTime  @default(now())
+}
+
+model Product {
+  id             String    @id @default(cuid())
+  merchantId     String
+  externalId     String // merchant SKU / Shopify variant/product ID
+  title          String
+  description    String?
+  imageUrl       String
+  imageUrls      Json      @default("[]")
+  price          Decimal
+  compareAtPrice Decimal?
+  currency       String    @default("USD")
+  priceUpdatedAt DateTime  @default(now())
+  inStock        Boolean   @default(true)
+  productUrl     String // clean merchant URL
+  affiliateUrl   String? // tracked; null until approval
+  categoryId     String?
+  themeTags      Json      @default("[]") // ["spiderman","superhero"]
+  colorTags      Json      @default("[]")
+  packQuantity   Int? // "50 Count" -> 50. Critical for scaling.
+  ageMin         Int?
+  ageMax         Int?
+  active         Boolean   @default(true)
+  merchant       Merchant  @relation(fields: [merchantId], references: [id])
+  category       Category? @relation(fields: [categoryId], references: [id])
+  registryItems  RegistryItem[]
+  clicks         Click[]
+  createdAt      DateTime  @default(now())
+
+  @@unique([merchantId, externalId])
+  @@index([categoryId])
+  @@index([merchantId])
+}
+
+model Category {
+  id         String    @id @default(cuid())
+  siteId     String?
+  slug       String    @unique // "tableware","balloons","favors"
+  name       String
+  icon       String?
+  sortOrder  Int       @default(0)
+  perGuest   Boolean   @default(false) // does quantity scale with headcount?
+  essential  Boolean   @default(true) // appears in every plan
+  products   Product[]
+
+  @@index([siteId])
+}
+
+model Theme {
+  id        String   @id @default(cuid())
+  siteId    String
+  name      String // "Spiderman"
+  slug      String  @unique
+  aliases   Json    @default("[]") // ["spider-man","spidey"]
+  tags      Json    @default("[]") // maps to Product.themeTags
+  ageMin    Int?
+  ageMax    Int?
+  heroColor String? // hex for placeholder art
+  emoji     String?
+  blurb     String?
+  site      Site    @relation(fields: [siteId], references: [id])
+  events    Event[]
+  createdAt DateTime @default(now())
+}
+
+model RecommendationSet {
+  id        String   @id @default(cuid())
+  eventId   String
+  inputHash String // cache key
+  output    Json // validated structure
+  model     String?
+  tokensIn  Int?
+  tokensOut Int?
+  latencyMs Int?
+  source    String   @default("ai") // ai | fallback | cached
+  createdAt DateTime @default(now())
+  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([inputHash])
+  @@index([eventId])
+}
+
+model RegistryItem {
+  id         String    @id @default(cuid())
+  eventId    String
+  productId  String
+  quantity   Int       @default(1)
+  category   String?
+  aiReason   String? // why the AI picked it
+  claimedBy  String?
+  claimedAt  DateTime?
+  status     String    @default("AVAILABLE") // AVAILABLE | CLAIMED | PURCHASED
+  sortOrder  Int       @default(0)
+  event      Event     @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  product    Product   @relation(fields: [productId], references: [id])
+  createdAt  DateTime  @default(now())
+
+  @@index([eventId])
+  @@index([productId])
+}
+
+model Click {
+  id           String    @id @default(cuid()) // becomes Impact SubId1
+  productId    String
+  merchantId   String
+  eventId      String?
+  userId       String?
+  source       String    @default("PLANNER") // PLANNER | REGISTRY | ARTICLE | THEME
+  referrerType String    @default("DIRECT") // HOST | GUEST | SEARCH | DIRECT
+  ipHash       String?
+  userAgent    String?
+  isBot        Boolean   @default(false)
+  createdAt    DateTime  @default(now())
+  product      Product   @relation(fields: [productId], references: [id])
+  merchant     Merchant  @relation(fields: [merchantId], references: [id])
+  event        Event?    @relation(fields: [eventId], references: [id])
+
+  @@index([createdAt])
+  @@index([eventId])
+}
+
+model Conversion {
+  id          String   @id @default(cuid())
+  clickId     String? // matched via SubId1
+  merchantId  String
+  orderValue  Decimal
+  commission  Decimal
+  status      String   @default("PENDING") // PENDING | APPROVED | REVERSED
+  reportedAt  DateTime
+  rawPayload  Json?
+  createdAt   DateTime @default(now())
+}
+
+model Article {
+  id          String    @id @default(cuid())
+  siteId      String
+  slug        String
+  title       String
+  excerpt     String?
+  body        String // markdown
+  themeId     String?
+  heroColor   String?
+  publishedAt DateTime?
+  readMinutes Int       @default(5)
+  site        Site      @relation(fields: [siteId], references: [id])
+
+  @@unique([siteId, slug])
+  @@index([siteId])
+}

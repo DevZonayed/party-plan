@@ -1,0 +1,42 @@
+{
+  "name": "party-plan",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint .",
+    "db:push": "prisma db push",
+    "db:studio": "prisma studio",
+    "db:seed": "tsx prisma/seed.ts",
+    "ingest": "tsx prisma/ingest.ts",
+    "migrate:deploy": "prisma migrate deploy"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.16.3",
+    "bcryptjs": "3.0.2",
+    "better-sqlite3": "12.4.1",
+    "clsx": "2.1.1",
+    "nanoid": "5.1.5",
+    "next": "16.3.0",
+    "openai": "6.6.0",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "tailwind-merge": "3.3.1",
+    "zod": "4.1.11"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "4.1.17",
+    "@types/bcryptjs": "2.4.6",
+    "@types/node": "24.8.0",
+    "@types/react": "19.2.2",
+    "@types/react-dom": "19.2.8",
+    "eslint": "9.36.0",
+    "eslint-config-next": "16.3.0",
+    "prisma": "^6.16.3",
+    "tailwindcss": "4.1.17",
+    "tsx": "4.20.6",
+    "typescript": "5.9.2"
+  }
+}
