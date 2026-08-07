@@ -7,6 +7,7 @@ COPY prisma ./prisma
 RUN npx prisma generate
 # Build-time DB so ISR pages (/, /themes, /ideas) can prerender with catalog data.
 ENV DATABASE_URL=file:/tmp/build.db
+ENV NEXT_PUBLIC_APP_URL=https://party-plan.jonayed.me
 RUN npx prisma db push --skip-generate && npx tsx prisma/seed.ts
 COPY . .
 RUN npm run build
@@ -16,6 +17,7 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates && rm -rf /var/lib/apt/lists/*
 ENV NODE_ENV=production
 ENV DATABASE_URL=file:/data/app.db
+ENV NEXT_PUBLIC_APP_URL=https://party-plan.jonayed.me
 ENV PORT=3000
 COPY --from=builder /app/package*.json ./
 COPY --from=builder /app/node_modules ./node_modules
