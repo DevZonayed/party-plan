@@ -7,11 +7,9 @@ import { ProductTile } from "@/components/product-tile";
 import { FtcDisclosure } from "@/components/ftc-disclosure";
 import type { HydratedItem, HydratedPlan } from "@/lib/types";
 
-// There is intentionally NO text input anywhere in this UI. The conversation
-// advances purely through the user tapping option chips ("quick replies"),
-// which satisfies the "no input, works on user interaction" requirement. The
-// server validates every answer, so off-topic input is structurally impossible
-// and any unexpected value is ignored (moderation).
+// Quick replies keep common answers fast, while the composer lets people talk
+// naturally. The server interprets each message only in the context of the
+// current party-planning question and re-prompts when it cannot use the answer.
 
 interface QuickReply {
   label: string;
@@ -83,6 +81,7 @@ export function ChatPlanner() {
   const [state, setState] = useState<ConvState>({ step: "intro" });
   const [busy, setBusy] = useState(false);
   const [planning, setPlanning] = useState(false);
+  const [draft, setDraft] = useState("");
   const [publishingId, setPublishingId] = useState<string | null>(null);
   const [swapFor, setSwapFor] = useState<{ msgId: string; itemId: string } | null>(null);
   const [alts, setAlts] = useState<SwapAlt[] | null>(null);
@@ -102,7 +101,7 @@ export function ChatPlanner() {
   }, []);
 
   const send = useCallback(
-    async (answer: string | null, label: string | null, fromState?: ConvState) => {
+    async (answer: string | null, label: string | null, fromState?: ConvState, message?: string) => {
       const baseState = fromState ?? state;
       if (busy) return;
 
@@ -128,7 +127,7 @@ export function ChatPlanner() {
         const res = await fetch("/api/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ state: baseState, answer }),
+          body: JSON.stringify({ state: baseState, answer, message }),
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data?.error || "Something went wrong");
@@ -141,7 +140,7 @@ export function ChatPlanner() {
           pushAssistant(turn);
         }
         setPlanning(false);
-      } catch (e) {
+      } catch {
         setPlanning(false);
         setState((s) => (s.step === "location" ? { ...s, step: "result" } : s));
         pushAssistant({
@@ -161,6 +160,13 @@ export function ChatPlanner() {
     startedRef.current = true;
     void send(null, null, { step: "intro" });
   }, [send]);
+
+  function submitMessage() {
+    const message = draft.trim();
+    if (!message || busy || planning) return;
+    setDraft("");
+    void send(null, message, undefined, message);
+  }
 
   async function doSwap(msgId: string, itemId: string, themeSlug?: string) {
     setSwapFor({ msgId, itemId });
@@ -215,6 +221,7 @@ export function ChatPlanner() {
     );
     setSwapFor(null);
     setAlts(null);
+    setDraft("");
   }
 
   async function publish(draftId: string) {
@@ -255,7 +262,7 @@ export function ChatPlanner() {
         </div>
         <div className="min-w-0">
           <p className="font-bold leading-tight">Pippa · AI Party Planner</p>
-          <p className="text-xs text-emerald-600">● Online — tap options to chat</p>
+          <p className="text-xs text-emerald-600">● Online — type a message or use suggestions</p>
         </div>
         <button onClick={restart} className="btn-ghost btn ml-auto px-3 py-1.5 text-xs">↺ Restart</button>
       </div>
@@ -356,9 +363,42 @@ export function ChatPlanner() {
         <div className="h-2" />
       </div>
 
-      <div className="mt-3 rounded-xl border border-brand-100 bg-brand-50/40 px-4 py-2 text-center text-xs text-foreground/50">
-        🎯 Tap an option above to answer — no typing needed. Pippa only talks party planning. 💜
-      </div>
+      <form
+        className="mt-3 rounded-2xl border border-brand-100 bg-white p-2 shadow-sm"
+        onSubmit={(event) => {
+          event.preventDefault();
+          submitMessage();
+        }}
+      >
+        <div className="flex items-end gap-2">
+          <textarea
+            value={draft}
+            onChange={(event) => setDraft(event.target.value.slice(0, 500))}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && !event.shiftKey) {
+                event.preventDefault();
+                submitMessage();
+              }
+            }}
+            placeholder="Message Pippa about your party…"
+            aria-label="Message Pippa"
+            rows={1}
+            disabled={busy || planning}
+            className="max-h-32 min-h-11 flex-1 resize-none rounded-xl border border-brand-200 bg-brand-50/30 px-3.5 py-2.5 text-sm outline-none transition placeholder:text-foreground/40 focus:border-brand-400 focus:bg-white focus:ring-2 focus:ring-brand-100 disabled:cursor-not-allowed disabled:opacity-60"
+          />
+          <button
+            type="submit"
+            disabled={busy || planning || draft.trim().length === 0}
+            aria-label="Send message"
+            className="btn-primary btn h-11 w-11 shrink-0 rounded-xl p-0 text-lg"
+          >
+            ↑
+          </button>
+        </div>
+        <p className="px-1 pt-1.5 text-xs text-foreground/45">
+          Press Enter to send · Quick suggestions are optional · Party-planning messages only
+        </p>
+      </form>
     </div>
   );
 }

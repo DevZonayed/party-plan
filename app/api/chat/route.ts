@@ -8,6 +8,7 @@ import { getClientIp } from "@/lib/affiliate";
 import {
   advance,
   buildResultTurn,
+  interpretFreeText,
   type ChatTheme,
   type ConversationState,
 } from "@/lib/planner/conversation";
@@ -32,6 +33,7 @@ const StateSchema = z.object({
 const BodySchema = z.object({
   state: StateSchema.passthrough().default({ step: "intro" }),
   answer: z.string().max(120).nullable().default(null),
+  message: z.string().trim().min(1).max(500).optional(),
 });
 
 export async function POST(req: NextRequest) {
@@ -58,7 +60,7 @@ export async function POST(req: NextRequest) {
   }
 
   const state = parsed.data.state as ConversationState;
-  const answer = parsed.data.answer;
+  let answer = parsed.data.answer;
 
   const themes = await prisma.theme.findMany({
     orderBy: { name: "asc" },
@@ -70,7 +72,17 @@ export async function POST(req: NextRequest) {
     emoji: t.emoji ?? "🎉",
   }));
 
+  const typedMessage = parsed.data.message;
+  const interpretedAnswer = typedMessage
+    ? interpretFreeText(state, typedMessage, chatThemes)
+    : null;
+  if (typedMessage) answer = interpretedAnswer;
+
   const result = advance(state, answer, chatThemes);
+
+  if (typedMessage && interpretedAnswer === null && state.step !== "planning") {
+    result.ignored = true;
+  }
 
   // If the flow has collected everything, run the (validated, hallucination-
   // proof) planner and append the celebratory result turn.
