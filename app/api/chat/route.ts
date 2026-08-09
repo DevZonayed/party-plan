@@ -12,6 +12,9 @@ import {
   type ChatTheme,
   type ConversationState,
 } from "@/lib/planner/conversation";
+import { isAIConfigured } from "@/lib/ai/client";
+import { interpretMessageWithModel } from "@/lib/planner/model-interpreter";
+import type { ModelInterpretation } from "@/lib/planner/model-interpreter-core";
 import type { PlanInput, LocationType } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -24,6 +27,7 @@ const StateSchema = z.object({
     .default("intro"),
   themeSlug: z.string().max(80).optional(),
   themeName: z.string().max(80).optional(),
+  themeTags: z.array(z.string().max(80)).max(8).optional(),
   guestCount: z.number().int().min(1).max(500).optional(),
   budgetTotal: z.number().min(10).max(5000).optional(),
   childAge: z.number().int().min(0).max(18).optional(),
@@ -73,14 +77,22 @@ export async function POST(req: NextRequest) {
   }));
 
   const typedMessage = parsed.data.message;
-  const interpretedAnswer = typedMessage
-    ? interpretFreeText(state, typedMessage, chatThemes)
-    : null;
-  if (typedMessage) answer = interpretedAnswer;
+  let modelInterpretation: ModelInterpretation | null = null;
+  if (typedMessage) {
+    if (isAIConfigured()) {
+      try {
+        modelInterpretation = await interpretMessageWithModel(state, typedMessage, chatThemes);
+      } catch (error) {
+        console.warn("[chat] model interpretation failed, using local fallback:", (error as Error).message);
+      }
+    }
+    const fallbackAnswer = interpretFreeText(state, typedMessage, chatThemes);
+    answer = modelInterpretation?.relevant ? modelInterpretation.answer : fallbackAnswer;
+  }
 
-  const result = advance(state, answer, chatThemes);
+  const result = advance(state, answer, chatThemes, modelInterpretation ?? undefined);
 
-  if (typedMessage && interpretedAnswer === null && state.step !== "planning") {
+  if (typedMessage && answer === null && state.step !== "planning") {
     result.ignored = true;
   }
 
@@ -122,6 +134,7 @@ export async function POST(req: NextRequest) {
     const input: PlanInput = {
       siteSlug: site.slug,
       themeSlug: state.themeSlug,
+      themeTags: state.themeTags,
       childAge: state.childAge,
       guestCount: state.guestCount,
       budgetTotal: state.budgetTotal,

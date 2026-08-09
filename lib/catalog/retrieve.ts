@@ -46,9 +46,11 @@ export async function retrieveCandidates(opts: RetrieveOptions): Promise<{
     }
     const tags = asStringArray(p.themeTags);
     const hit = themeTags.some((t) => tags.includes(t));
-    // Always include "generic"/neutral items (no theme tags) as filler candidates.
+    // Always include generic/neutral items as filler candidates. This keeps
+    // custom themes plannable even when the catalog has no exact licensed set.
     const neutral = tags.length === 0;
-    if (!hit && !neutral) continue;
+    const generic = tags.includes("generic");
+    if (!hit && !neutral && !generic) continue;
 
     const catSlug = p.category?.slug ?? "other";
     const arr = byCategory.get(catSlug) ?? [];

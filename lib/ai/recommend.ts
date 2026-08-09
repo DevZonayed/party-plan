@@ -56,7 +56,9 @@ export interface GenerateResult {
 
 export async function generatePlan(input: PlanInput): Promise<GenerateResult> {
   const theme = await prisma.theme.findUnique({ where: { slug: input.themeSlug } });
-  const themeTags = theme ? asStringArray(theme.tags) : [input.themeSlug.toLowerCase()];
+  const themeTags = theme
+    ? asStringArray(theme.tags)
+    : [...new Set([input.themeSlug.toLowerCase(), ...(input.themeTags ?? [])])];
   const themeId = theme?.id ?? input.themeSlug;
   const inputHash = hashInput(input, themeId);
 
@@ -240,7 +242,9 @@ export async function generatePlanStreaming(
   onToken: (delta: string, full: string) => void
 ): Promise<GenerateResult> {
   const theme = await prisma.theme.findUnique({ where: { slug: input.themeSlug } });
-  const themeTags = theme ? asStringArray(theme.tags) : [input.themeSlug.toLowerCase()];
+  const themeTags = theme
+    ? asStringArray(theme.tags)
+    : [...new Set([input.themeSlug.toLowerCase(), ...(input.themeTags ?? [])])];
   const themeId = theme?.id ?? input.themeSlug;
   const inputHash = hashInput(input, themeId);
 
