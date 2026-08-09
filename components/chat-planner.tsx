@@ -37,6 +37,7 @@ interface ConvState {
   step: Step;
   themeSlug?: string;
   themeName?: string;
+  themeTags?: string[];
   guestCount?: number;
   budgetTotal?: number;
   childAge?: number;
@@ -105,7 +106,7 @@ export function ChatPlanner() {
       const baseState = fromState ?? state;
       if (busy) return;
 
-      if (answer !== null && label !== null) {
+      if (label !== null) {
         setMessages((prev) => {
           const next = [...prev];
           for (let i = next.length - 1; i >= 0; i--) {

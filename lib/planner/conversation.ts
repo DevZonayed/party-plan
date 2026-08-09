@@ -25,10 +25,18 @@ export interface ConversationState {
   step: ChatStep;
   themeSlug?: string;
   themeName?: string;
+  themeTags?: string[];
   guestCount?: number;
   budgetTotal?: number;
   childAge?: number;
   locationType?: LocationType;
+}
+
+export interface InterpretedAnswer {
+  answer: string | null;
+  themeName?: string | null;
+  themeTags?: string[];
+  reply?: string | null;
 }
 
 export interface QuickReply {
@@ -218,6 +226,7 @@ export function advance(
   prev: ConversationState,
   answer: string | null,
   themes: ChatTheme[],
+  interpreted?: InterpretedAnswer,
 ): AdvanceResult {
   const state: ConversationState = { ...prev };
   const ignoredBase: Pick<AdvanceResult, "ignored" | "readyForPlan"> = {
@@ -253,12 +262,17 @@ export function advance(
 
     case "theme": {
       const slugs = new Set(themes.map((t) => t.slug));
-      if (answer && slugs.has(answer)) {
-        const theme = themes.find((t) => t.slug === answer)!;
-        state.themeSlug = theme.slug;
-        state.themeName = theme.name;
+      const theme = answer ? themes.find((t) => t.slug === answer) : undefined;
+      const customThemeName = interpreted?.themeName?.trim();
+      if (answer && (slugs.has(answer) || customThemeName)) {
+        state.themeSlug = answer;
+        state.themeName = theme?.name ?? customThemeName!;
+        state.themeTags = theme ? undefined : interpreted?.themeTags;
+        const themeEmoji = theme ? theme.emoji : "🎨";
+        const acknowledgement = interpreted?.reply?.trim();
+        const themeGreeting = acknowledgement || "Ooh, " + state.themeName + "! Great pick " + themeEmoji;
         const turn: AssistantTurn = {
-          text: `Ooh, ${theme.name}! Great pick ${theme.emoji} Now — roughly how many guests are coming? (Kids + grown-ups count.)`,
+          text: themeGreeting + " Now — roughly how many guests are coming? (Kids + grown-ups count.)",
           quickReplies: GUEST_OPTIONS,
         };
         state.step = "guests";

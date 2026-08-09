@@ -12,6 +12,7 @@ export type RecSource = "ai" | "fallback" | "cached";
 export interface PlanInput {
   siteSlug: string;
   themeSlug: string;
+  themeTags?: string[];
   childName?: string;
   childAge?: number;
   guestCount: number;
