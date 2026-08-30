@@ -18,7 +18,7 @@
     "bcryptjs": "3.0.2",
     "better-sqlite3": "12.4.1",
     "clsx": "2.1.1",
-    "nanoid": "5.1.5",
+    "nanoid": "5.1.16",
     "next": "16.3.0",
     "openai": "6.6.0",
     "react": "19.2.8",
